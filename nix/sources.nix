@@ -25,34 +25,26 @@ let
         pkgs.fetchzip { name = name'; inherit (spec) url sha256; };
 
   fetch_git = name: spec:
-    let
-      ref =
-        if spec ? ref then spec.ref else
-          if spec ? branch then "refs/heads/${spec.branch}" else
-            if spec ? tag then "refs/tags/${spec.tag}" else
-              abort "In git source '${name}': Please specify `ref`, `tag` or `branch`!";
-      submodules = if spec ? submodules then spec.submodules else false;
-      submoduleArg =
-        let
-          nixSupportsSubmodules = builtins.compareVersions builtins.nixVersion "2.4" >= 0;
-          emptyArgWithWarning =
-            if submodules == true
-            then
-              builtins.trace
-                (
-                  "The niv input \"${name}\" uses submodules "
-                  + "but your nix's (${builtins.nixVersion}) builtins.fetchGit "
-                  + "does not support them"
-                )
-                {}
-            else {};
-        in
-          if nixSupportsSubmodules
-          then { inherit submodules; }
-          else emptyArgWithWarning;
-    in
-      builtins.fetchGit
-        ({ url = spec.repo; inherit (spec) rev; inherit ref; } // submoduleArg);
+  let
+    ref = if spec ? ref then spec.ref
+          else if spec ? branch then "refs/heads/${spec.branch}"
+          else if spec ? tag then "refs/tags/${spec.tag}"
+          else abort "In git source '${name}': Please specify `ref`, `tag` or `branch`!";
+    submodules = if spec ? submodules then spec.submodules else false;
+    submoduleArg = if builtins.compareVersions builtins.nixVersion "2.4" >= 0
+                   then { inherit submodules; }
+                   else {};
+    fetchArgs = { url = spec.repo; inherit (spec) rev; inherit ref; } // submoduleArg;
+    fetchResult = builtins.fetchGit fetchArgs;
+  in
+    if submodules == true && !builtins.hasAttr "submodules" fetchResult
+    then builtins.trace
+           ( "The niv input \"${name}\" uses submodules but your nix's ("
+             + builtins.nixVersion
+             + ") builtins.fetchGit does not support them"
+           )
+           fetchResult
+    else fetchResult;
 
   fetch_local = spec: spec.path;
 
