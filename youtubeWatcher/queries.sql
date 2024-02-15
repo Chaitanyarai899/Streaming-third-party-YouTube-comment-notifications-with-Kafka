@@ -23,6 +23,13 @@ FROM youtube_videos
 GROUP BY video_id
 EMIT CHANGES;
 
+CREATE TABLE current_queue WITH (KAFKA_TOPIC='stream queue') AS SELECT
+  video_id,
+  latest_by_offset(views,2)[1] AS views_current
+  FROM youtine_videos
+  GROUP BY video_id
+  EMIT CHANGES;
+
 CREATE STREAM youtube_changes_stream WITH (KAFKA_TOPIC='youtube_changes', VALUE_FORMAT='avro');
 
 INSERT INTO telegram_outbox
